@@ -1,3 +1,6 @@
+//NEW: Added 10/26/20
+//	calculates and displays output of P.D. feedback control calculation (OUTPUT IS NOT YET USED)
+//	Do we need to reset lastTime back to 0.0 when we start measuring a new edge?  (May be a stupid question.)
 //CTRL F EDIT: for edited parts and parts we may want to double-check
 //SOME VARIABLES STILL NEED VALUES ASSIGNED (WILL FALIL TO COMPILE)
 package main
@@ -16,6 +19,11 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
 
         count := 0
         LIDARstart := 0
+//NEW: 
+		lastError := 0.0
+		lastTime := 0.0
+		const kP := 0.0	//Proportionality Constant
+		const kD := 1.1	//Derivative Proportionality Constant
 
         err := lidarSensor.Start()
         if err != nil {
@@ -23,10 +31,11 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
         }
 
 		//EDIT: ARE THE NEXT TWO LOOPS INTENDED TO HELP CALCULATE OUR SPEED?
+		//NEW: Don't need this in a loop (Do we need this at all, or is it just to give a short pause at the begining?)
         for { //loop forever
                 lidarReading, err := lidarSensor.Distance()
                 if err != nil {
-                fmt.Println("Error reading lidar sensor %+v", err)
+						fmt.Println("Error reading lidar sensor %+v", err)
                 }
                 message := fmt.Sprintf("Lidar Reading: %d", lidarReading)
 
@@ -38,20 +47,21 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
         for{     
 				lidarReading, err := lidarSensor.Distance()
                 if err != nil{
-                fmt.Println("Error reading LIDAR sensor %+v", err)
+						fmt.Println("Error reading LIDAR sensor %+v", err)
                 }
                 if count != 50{
                         LIDARstart = LIDARstart + lidarReading
                         count = count + 1
-                }
-                if count == 50{
+                }else{
+				//NEW: Changed to use else instead of a new if statement
+                //if count == 50{
 						break
                 }
         }
         LIDARstart = (LIDARstart/count)
         fmt.Println(LIDARstart)
 
-//			EDIT: IS THIS UST HERE SO THAT WE DON'T HIT THE ABOVE SPEED CALCULATION SECTION AGAIN?
+//			EDIT: IS THIS JUST HERE SO THAT WE DON'T HIT THE ABOVE LIDARstart CALCULATION SECTION AGAIN?
         for{
 				
 					//Start next to box, back up until edge is passed
@@ -60,6 +70,14 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
                         if err != nil{
                                 fmt.Println("Error reading LIDAR sensor %+v", err)
                         }
+						
+						//NEW: Get error for feedback control
+						currentError := LIDARstart - lidarReading
+						currentTime := time.Now()
+						output := kP*currentError + kD*((lastError - currentError) / (lastTime - currentTime))
+						lastError = currentError
+						lastTime = currentTime
+						fmt.Println("Backup feedback output: ", output)
 
                         gopigo3.SetMotorDps(g.MOTOR_LEFT, -60)
                         gopigo3.SetMotorDps(g.MOTOR_RIGHT, -60)
@@ -81,6 +99,14 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
                         if err != nil{
                                 fmt.Println("Error reading LIDAR sensor %+v", err)
                         }
+						
+						//NEW: Get error for feedback control
+						currentError := LIDARstart - lidarReading
+						currentTime := time.Now()
+						output := kP*currentError + kD*((lastError - currentError) / (lastTime - currentTime))
+						lastError = currentError
+						lastTime = currentTime
+						fmt.Println("Advance to front edge feedback output: ", output)
 
                         gopigo3.SetMotorDps(g.MOTOR_LEFT, 60)
                         gopigo3.SetMotorDps(g.MOTOR_RIGHT, 60)
@@ -94,13 +120,23 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
 					//EDIT:
 					//Start following the edge of the box forward.  This is the loop to put the measurement code in.
 					//May need to remove the count at some point (It may put us too far forward.
-				count := 0
+				NEW: I changed "count := 0" to "count = 0" to reset the variable, without recreating it.
+				count = 0
                 for{
-                        count = count +1
+                        count = count + 1
                         lidarReading, err := lidarSensor.Distance()
                         if err != nil{
                                 fmt.Println("Error reading LIDAR sensor %+v", err)
                         }
+						
+						//NEW: Get error for feedback control
+						currentError := LIDARstart - lidarReading
+						currentTime := time.Now()
+						output := kP*currentError + kD*((lastError - currentError) / (lastTime - currentTime))
+						lastError = currentError
+						lastTime = currentTime
+						fmt.Println("Forward feedback output: ", output)
+						
                         gopigo3.SetMotorDps(g.MOTOR_LEFT,60)
                         gopigo3.SetMotorDps(g.MOTOR_RIGHT,60)
                         temp := float64(LIDARstart)/float64(lidarReading)
@@ -115,50 +151,12 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
                 }
 				
 					//EDIT: CODE FOR TURNING AND CHECKING IF ANGLE WAS CORRECT
-				loadout := 0
-				numCases := 4	//NEED TO CHANGE IF CHANGE NUMBER OF CASES IN SWITCH STATEMENT
 				fixTurnAmount := 0
 
-				for loadout < numCases{
-					
-						//MAY NEED TO SPECIFY INT TYPE
-						//MAY NEED TO NAME RETURN VALUE
-/*
-						leftWheelAmount, rightWheelAmount := func setWheels(loadout int) (returnedLeft int, returnedRight int) {
-							switch{
-								case loadout = 0:
-									return 45, 90
-								case loadout = 1:
-									return 0, 0 //SOME VALUE for leftWheelAmount, SOME VALUE for rightWheelAmount
-								case loadout = 0, 0:
-									return //SOME VALUE for leftWheelAmount, SOME VALUE for rightWheelAmount
-								case loadout = 3:
-									return //SOME VALUE for leftWheelAmount, SOME VALUE for rightWheelAmount
-							}
-*/
-						leftWheelAmount := 0 
-						rightWheelAmount := 0
-							switch (loadout){
-								case 0:
-									leftWheelAmount = 45
-									rightWheelAmount =  90
-								case 1:
-									leftWheelAmount = 0
-									rightWheelAmount = 0 //SOME VALUE for leftWheelAmount, SOME VALUE for rightWheelAmount
-								case 2:
-									leftWheelAmount = 0
-									rightWheelAmount = 0//SOME VALUE for leftWheelAmount, SOME VALUE for rightWheelAmount
-								case 3:
-									leftWheelAmount = 0
-									rightWheelAmount = 0 //SOME VALUE for leftWheelAmount, SOME VALUE for rightWheelAmount
-							}
-							
-							
-							
-					
-					
-					
-					
+				for{
+						leftWheelAmount := 45 
+						rightWheelAmount := 90
+						
 						if fixTurnAmount == 1{
 							leftWheelAmount = leftWheelAmount * -1
 							rightWheelAmount = rightWheelAmount * -1
@@ -173,6 +171,14 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
 								if err != nil{
 										fmt.Println("Error reading LIDAR sensor %+v", err)
 								}
+								
+								//NEW: Get error for feedback control
+								currentError := LIDARstart - lidarReading
+								currentTime := time.Now()
+								output := kP*currentError + kD*((lastError - currentError) / (lastTime - currentTime))
+								lastError = currentError
+								lastTime = currentTime
+								fmt.Println("Turning feedback output: ", output)
 								
 								temp := float64(LIDARstart)/float64(lidarReading)
 								fmt.Println("Turning reading  ", lidarReading)
@@ -189,123 +195,60 @@ func robotMainLoop(piProcessor *raspi.Adaptor, gopigo3 *g.Driver, lidarSensor *i
 						
 						
 							//DRIVE FORWARD AND CHECK TO SEE IF ROBOT IS (MOSTLY) PARALLEL TO THE BOX
-							//DO I NEED TO PASS lidarSensor.Distanc(), OR CAN CHECK PARALLEL STILL ACCESS IT?
+							//DO I NEED TO PASS lidarSensor.Distance(), OR CAN CHECK PARALLEL STILL ACCESS IT?
 						correctTurn := 0
-							turnCount :=0
+						turnCount :=0
 										
 										
-							for turnCount < 50{
-								gopigo3.SetMotorDps(g.MOTOR_LEFT,60)
-								gopigo3.SetMotorDps(g.MOTOR_RIGHT,60)
-								turnCount = count + 1
-							}
-							gopigo3.SetMotorDps(g.MOTOR_LEFT,0)
-							gopigo3.SetMotorDps(g.MOTOR_RIGHT,0)
-							
-							lidarReading, err := lidarSensor.Distance()
-							if err != nil{
-									fmt.Println("Error reading LIDAR sensor %+v", err)
-							}
-							temp := float64(LIDARstart)/float64(lidarReading)
-							fmt.Println("Turn check reading  ", lidarReading)
-							
-							//EDIT:
-							//PARALLEL TO BOX
-							if temp > .8 || temp < 1.2{
-									correctTurn = 1
-							}else{
-							correctTurn = 0
-							}
-						
-							//RETURN TO POSSITION ROBOT WAS IN BEFORE CHECKING IF PARALLEL
 						for turnCount < 50{
-								gopigo3.SetMotorDps(g.MOTOR_LEFT,60)
-								gopigo3.SetMotorDps(g.MOTOR_RIGHT,60)
-								turnCount = count + 1
+							gopigo3.SetMotorDps(g.MOTOR_LEFT,60)
+							gopigo3.SetMotorDps(g.MOTOR_RIGHT,60)
+							turnCount = turnCount + 1
 						}
 						gopigo3.SetMotorDps(g.MOTOR_LEFT,0)
 						gopigo3.SetMotorDps(g.MOTOR_RIGHT,0)
 						
-						if correctTurn == 0{
-							fixTurnAmount =1
-						}else{
-							fixTurnAmount = 0
-							loadout = loadout + 1
-						}
-						
-				}
-					
-				
-
-				
-					//EDIT: OLD CODE TO TURN AND START OF FIRST ATTEMPT TO CHECK FOR RIGHT ORIENTATION AFTER TURNING
-				/*
-					//EDIT: 
-					//Loop to turn.  May need to know the diameter of the wheel and the length of the robot
-					//May need to adjust tuning degrees
-				for{
 						lidarReading, err := lidarSensor.Distance()
 						if err != nil{
 								fmt.Println("Error reading LIDAR sensor %+v", err)
 						}
 						
-						temp := float64(LIDARstart)/float64(lidarReading)
-						fmt.Println("Turning reading  ", lidarReading)
+						//NEW: Get error for feedback control
+						currentError := LIDARstart - lidarReading
+						currentTime := time.Now()
+						output := kP*currentError + kD*((lastError - currentError) / (lastTime - currentTime))
+						lastError = currentError
+						lastTime = currentTime
+						fmt.Println("Parallel check feedback output: ", output)
 						
-						if temp > .8 || temp < 1.2{
-								gopigo3.SetMotorDps(g.MOTOR_LEFT, 0)
-								gopigo3.SetMotorDps(g.MOTOR_RIGHT, 0)
-								break
-						}
-						gopigo3.SetMotorDps(g.MOTOR_LEFT,45)				
-						gopigo3.SetMotorDps(g.MOTOR_RIGHT, 90)
-				}
-				
-				//EDIT:
-						//MAY WANT A LOOP HERE THAT DRIVES THE ROBOT FORWARD FOR A SET DISTANCE (USE A COUNT) AND CHECKS TO MAKE SURE THAT THE ROBOT IS PROPERLY ALIGNED (MAKE SURE THAT THE ROBOT IS NEITHER TOO CLOSE, NOR TOO FAR AWAY AFTER THE DISTANCE IS REACHED.)  RETURN TO POSITION AT START OF COUNT, CHOOSE A DIFFERENT VALUES TO TURN THE WHEELS, AND TRY AGAIN.
-						//IF WE DO USE THIS TO CORRECT THE ANGLE OF TURNING, 
-							//WE WILL LIKELY NEED TO PUT THIS AND THE TURNING LOOP 
-							//INTO ANOTHER FOR LOOP, REPLACE THE HARD-CODED VALUES IN 
-							//THE TURNING LOOP WITH VARIABLES THAT HAVE THEIR VALUES 
-							//SET TO EITHER POSITIVE OR NEGATIVE, DEPENDING ON WHETHER 
-							//THE ROBOT IS GOING FORWARD, OR RETURNING TO ITS 
-							//PRE-TURNING STARTING POSITION BEFORE TRYING THE NEXT 
-							//SET OF POSSIBLE TURNING DEGREES (WHICH MAY BE REMOVED 
-							//ONCE WE FIND THE PROPER SET, AS THEY WOULD BE USED 
-							//FOR TESTING PURPOSES, SO THAT WE DON'T NEED TO STOP, 
-							//EDIT, RECOMPILE, AND RUN EACH TIME WE WANT TO TEST A NEW SET OF DEGREES.) 
-					//MAY NEED TO CHECK SYNTAX FOR "False"
-				*/
-				/*
-				correctTurn := False
-				for correctTurn == False{
-						
-						turnCount :=0
-						
-						
-						for turnCount < 50{
-							gopigo3.SetMotorDps(g.MOTOR_LEFT,60)
-							gopigo3.SetMotorDps(g.MOTOR_RIGHT,60)
-							turnCount = count + 1
-						}
-						
-						lidarReading, err := lidarSensor.Distance()
-                        if err != nil{
-                                fmt.Println("Error reading LIDAR sensor %+v", err)
-                        }
 						temp := float64(LIDARstart)/float64(lidarReading)
 						fmt.Println("Turn check reading  ", lidarReading)
 						
 						//EDIT:
+						//PARALLEL TO BOX
 						if temp > .8 || temp < 1.2{
-								correctTurn = True
-								break
+								correctTurn = 1
+						}else{
+								correctTurn = 0
 						}
 						
+							//RETURN TO POSITION ROBOT WAS IN BEFORE CHECKING IF PARALLEL
+						for turnCount > 0{
+								gopigo3.SetMotorDps(g.MOTOR_LEFT, -60)
+								gopigo3.SetMotorDps(g.MOTOR_RIGHT, -60)
+								turnCount = turnCount - 1
+						}
+						gopigo3.SetMotorDps(g.MOTOR_LEFT,0)
+						gopigo3.SetMotorDps(g.MOTOR_RIGHT,0)
+						
+						if correctTurn == 0{
+							fixTurnAmount = 1
+						}else{
+							break
+						}
 						
 				}
-				*/
-//					EDIT: END OF OLD STUFF
+					
         }
 }
 
@@ -327,5 +270,3 @@ func main() {
     robot.Start()
 
 }
-
-
