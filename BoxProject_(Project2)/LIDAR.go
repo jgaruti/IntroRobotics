@@ -1,7 +1,7 @@
 package main
 
 import (
-    "fmt"
+        "fmt"
     "gobot.io/x/gobot"
     "gobot.io/x/gobot/drivers/aio"
     "gobot.io/x/gobot/drivers/i2c"
